@@ -136,53 +136,80 @@ void main() {
     expect(key.currentState!.value == 1, isTrue);
   });
 
-  testWidgets(
-    'routing config works with shell route',
-    // TODO(tolo): Temporarily skipped due to a bug that causes test to faiL
-    skip: true,
-    (WidgetTester tester) async {
-      final key = GlobalKey<_StatefulTestState>(debugLabel: 'testState');
-      final rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
-      final shellNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shell');
+  testWidgets('routing config works with shell route', (WidgetTester tester) async {
+    final key = GlobalKey<_StatefulTestState>(debugLabel: 'testState');
+    final rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
+    final shellNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shell');
 
-      final config = ValueNotifier<RoutingConfig>(
-        RoutingConfig(
-          routes: <RouteBase>[
-            ShellRoute(
-              navigatorKey: shellNavigatorKey,
-              routes: <RouteBase>[GoRoute(path: '/', builder: (_, _) => const Text('home'))],
-              builder: (_, _, Widget widget) => StatefulTest(key: key, child: widget),
-            ),
-          ],
-        ),
-      );
-      addTearDown(config.dispose);
-      await createRouterWithRoutingConfig(
-        navigatorKey: rootNavigatorKey,
-        config,
-        tester,
-        errorBuilder: (_, _) => const Text('error'),
-      );
-      expect(find.text('home'), findsOneWidget);
-      key.currentState!.value = 1;
-
-      config.value = RoutingConfig(
+    final config = ValueNotifier<RoutingConfig>(
+      RoutingConfig(
         routes: <RouteBase>[
           ShellRoute(
             navigatorKey: shellNavigatorKey,
-            routes: <RouteBase>[
-              GoRoute(path: '/', builder: (_, _) => const Text('home')),
-              GoRoute(path: '/abc', builder: (_, _) => const Text('/abc')),
-            ],
+            routes: <RouteBase>[GoRoute(path: '/', builder: (_, _) => const Text('home'))],
             builder: (_, _, Widget widget) => StatefulTest(key: key, child: widget),
           ),
         ],
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    addTearDown(config.dispose);
+    await createRouterWithRoutingConfig(
+      navigatorKey: rootNavigatorKey,
+      config,
+      tester,
+      errorBuilder: (_, _) => const Text('error'),
+    );
+    expect(find.text('home'), findsOneWidget);
+    key.currentState!.value = 1;
 
-      expect(key.currentState!.value == 1, isTrue);
-    },
-  );
+    config.value = RoutingConfig(
+      routes: <RouteBase>[
+        ShellRoute(
+          navigatorKey: shellNavigatorKey,
+          routes: <RouteBase>[
+            GoRoute(path: '/', builder: (_, _) => const Text('home')),
+            GoRoute(path: '/abc', builder: (_, _) => const Text('/abc')),
+          ],
+          builder: (_, _, Widget widget) => StatefulTest(key: key, child: widget),
+        ),
+      ],
+    );
+    await tester.pumpAndSettle();
+
+    expect(key.currentState!.value == 1, isTrue);
+  });
+
+  testWidgets('routing config keeps imperative matches nested in a shell route', (
+    WidgetTester tester,
+  ) async {
+    final shellNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shell');
+
+    RoutingConfig buildConfig() => RoutingConfig(
+      routes: <RouteBase>[
+        ShellRoute(
+          navigatorKey: shellNavigatorKey,
+          routes: <RouteBase>[
+            GoRoute(path: '/', builder: (_, _) => const Text('home')),
+            GoRoute(path: '/detail', builder: (_, _) => const Text('detail')),
+          ],
+          builder: (_, _, Widget widget) => widget,
+        ),
+      ],
+    );
+
+    final config = ValueNotifier<RoutingConfig>(buildConfig());
+    addTearDown(config.dispose);
+    final GoRouter router = await createRouterWithRoutingConfig(config, tester);
+    expect(find.text('home'), findsOneWidget);
+
+    router.push('/detail');
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsOneWidget);
+
+    config.value = buildConfig();
+    await tester.pumpAndSettle();
+    expect(find.text('detail'), findsOneWidget);
+  });
 
   testWidgets('routing config works with named route', (WidgetTester tester) async {
     final config = ValueNotifier<RoutingConfig>(
