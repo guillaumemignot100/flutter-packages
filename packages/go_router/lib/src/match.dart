@@ -174,7 +174,7 @@ abstract class RouteMatchBase with Diagnosticable {
       // have at least one match for this ShellRouteBase.
       matches: subRouteMatches!.remove(null)!,
       matchedLocation: remainingLocation,
-      pageKey: ValueKey<String>(route.hashCode.toString()),
+      pageKey: ValueKey<String>(route.pageIdentity.toString()),
       navigatorKey: navigatorKeyUsed,
     );
     subRouteMatches.putIfAbsent(parentKey, () => <RouteMatchBase>[]).insert(0, result);

@@ -520,6 +520,17 @@ abstract class ShellRouteBase extends RouteBase {
   /// Defaults to `true`.
   final bool notifyRootObserver;
 
+  /// Identifies this shell, and is used to build [ShellRouteMatch.pageKey].
+  ///
+  /// [Navigator] compares page keys to decide whether a new page updates an
+  /// existing route or replaces it. When this value changes, the shell's page
+  /// is replaced and everything below it, including nested [Navigator]s and
+  /// their state, is rebuilt.
+  ///
+  /// Implementations must return a value that is different from every other 
+  /// shell's identity
+  Object get pageIdentity;
+
   static void _debugCheckSubRouteParentNavigatorKeys(
     List<RouteBase> subRoutes,
     GlobalKey<NavigatorState> navigatorKey,
@@ -798,11 +809,21 @@ class ShellRoute extends ShellRouteBase {
   /// The [GlobalKey] to be used by the [Navigator] built for this route.
   /// All ShellRoutes build a Navigator by default. Child GoRoutes
   /// are placed onto this Navigator instead of the root Navigator.
+  /// 
+  /// Apps that rebuild their routing table with [GoRouter.routingConfig] should
+  /// pass an explicit key so that a rebuilt-but-equivalent shell keeps its 
+  /// page state.
   final GlobalKey<NavigatorState> navigatorKey;
 
   /// Restoration ID to save and restore the state of the navigator, including
   /// its history.
   final String? restorationScopeId;
+
+  // The Navigator key identifies this shell: it is unique among shells, and a
+  // ShellRoute uses the same key for every sub-route, so it does not change as
+  // the user navigates within the shell.
+  @override
+  Object get pageIdentity => navigatorKey;
 
   @override
   GlobalKey<NavigatorState> navigatorKeyForSubRoute(RouteBase subRoute) {
@@ -893,6 +914,12 @@ class StatefulShellRoute extends ShellRouteBase {
   /// the navigator key specified in [StatefulShellBranch]. The Widget
   /// implementing the container for the branch Navigators is provided by
   /// [navigatorContainerBuilder].
+  /// 
+  /// {@template StatefulShellRoute.key}
+  /// Apps that rebuild their routing table with [GoRouter.routingConfig] 
+  /// should pass an explicit key here so that a rebuilt-but-equivalent shell
+  /// keeps its page state.
+  /// {@endtemplate}
   StatefulShellRoute({
     required this.branches,
     super.redirect,
@@ -928,6 +955,8 @@ class StatefulShellRoute extends ShellRouteBase {
   ///
   /// See [Stateful Nested Navigation](https://github.com/flutter/packages/blob/main/packages/go_router/example/lib/stacked_shell_route.dart)
   /// for a complete runnable example using StatefulShellRoute.indexedStack.
+  /// 
+  /// {@macro StatefulShellRoute.key}
   StatefulShellRoute.indexedStack({
     required List<StatefulShellBranch> branches,
     bool notifyRootObserver = true,
@@ -1003,6 +1032,9 @@ class StatefulShellRoute extends ShellRouteBase {
   final List<StatefulShellBranch> branches;
 
   final GlobalKey<StatefulNavigationShellState> _shellStateKey;
+
+  @override
+  Object get pageIdentity => _shellStateKey;
 
   @override
   Widget? buildWidget(
