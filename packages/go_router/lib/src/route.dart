@@ -1137,6 +1137,7 @@ class StatefulShellRoute extends ShellRouteBase {
 /// Representation of a separate branch in a stateful navigation tree, used to
 /// configure [StatefulShellRoute].
 ///
+/// {@template StatefulShellBranch}
 /// The only required argument when creating a StatefulShellBranch is the
 /// sub-routes ([routes]), however sometimes it may be convenient to also
 /// provide a [initialLocation]. The value of this parameter is used when
@@ -1149,9 +1150,16 @@ class StatefulShellRoute extends ShellRouteBase {
 /// provided when creating a StatefulShellBranch, which can be useful when the
 /// Navigator needs to be accessed elsewhere. If no key is provided, a default
 /// one will be created.
+/// 
+/// Note: Apps that rebuild their routing table with [GoRouter.routingConfig] 
+/// should pass an explicit [navigatorKey] here so that a rebuilt-but-equivalent
+/// branch keeps its navigator state.
+/// {@endtemplate}
 @immutable
 class StatefulShellBranch {
   /// Constructs a [StatefulShellBranch].
+  /// 
+  /// {@macro StatefulShellBranch}
   StatefulShellBranch({
     required this.routes,
     GlobalKey<NavigatorState>? navigatorKey,
@@ -1357,17 +1365,19 @@ class StatefulNavigationShell extends StatefulWidget {
 
 /// State for StatefulNavigationShell.
 class StatefulNavigationShellState extends State<StatefulNavigationShell> with RestorationMixin {
-  final Map<StatefulShellBranch, _StatefulShellBranchState> _branchState =
-      <StatefulShellBranch, _StatefulShellBranchState>{};
+  final Map<GlobalKey<NavigatorState>, _StatefulShellBranchState> _branchState =
+      <GlobalKey<NavigatorState>, _StatefulShellBranchState>{};
 
   /// The associated [StatefulShellRoute].
   StatefulShellRoute get route => widget.route;
 
   GoRouter get _router => widget._router;
 
-  bool _isBranchLoaded(StatefulShellBranch branch) => _branchState[branch] != null;
+  bool _isBranchLoaded(StatefulShellBranch branch) => _branchState[branch.navigatorKey] != null;
 
-  List<StatefulShellBranch> get _loadedBranches => _branchState.keys.toList();
+  List<StatefulShellBranch> get _loadedBranches => route.branches
+      .where((StatefulShellBranch branch) => _branchState.containsKey(branch.navigatorKey))
+      .toList();
 
   @override
   String? get restorationId => route.restorationScopeId;
@@ -1382,7 +1392,7 @@ class StatefulNavigationShellState extends State<StatefulNavigationShell> with R
   }
 
   _StatefulShellBranchState _branchStateFor(StatefulShellBranch branch, [bool register = true]) {
-    return _branchState.putIfAbsent(branch, () {
+    return _branchState.putIfAbsent(branch.navigatorKey, () {
       final branchState = _StatefulShellBranchState(
         location: _RestorableRouteMatchList(_router.configuration),
       );
@@ -1394,7 +1404,7 @@ class StatefulNavigationShellState extends State<StatefulNavigationShell> with R
   }
 
   RouteMatchList? _matchListForBranch(int index) =>
-      _branchState[route.branches[index]]?.location.value;
+      _branchState[route.branches[index].navigatorKey]?.location.value;
 
   /// Creates a new RouteMatchList that is scoped to the Navigators of the
   /// current shell route or it's descendants. This involves removing all the
@@ -1480,8 +1490,14 @@ class StatefulNavigationShellState extends State<StatefulNavigationShell> with R
   }
 
   void _cleanUpObsoleteBranches() {
-    _branchState.removeWhere((StatefulShellBranch branch, _StatefulShellBranchState branchState) {
-      if (!route.branches.contains(branch)) {
+    final Set<GlobalKey<NavigatorState>> validKeys = route.branches
+        .map((StatefulShellBranch branch) => branch.navigatorKey)
+        .toSet();
+    _branchState.removeWhere((
+      GlobalKey<NavigatorState> navigatorKey,
+      _StatefulShellBranchState branchState,
+    ) {
+      if (!validKeys.contains(navigatorKey)) {
         branchState.dispose();
         return true;
       }
@@ -1541,9 +1557,14 @@ class StatefulNavigationShellState extends State<StatefulNavigationShell> with R
     final List<Widget> children = route.branches
         .map(
           (StatefulShellBranch branch) => _BranchNavigatorProxy(
-            key: ObjectKey(branch),
+            // Keyed by the branch's Navigator key for the same reason
+            // _branchState is: an ObjectKey would change whenever the routing
+            // table is rebuilt, replacing the proxy and its Navigator instead
+            // of updating them.
+            key: ValueKey<GlobalKey<NavigatorState>>(branch.navigatorKey),
             branch: branch,
-            navigatorForBranch: (StatefulShellBranch branch) => _branchState[branch]?.navigator,
+            navigatorForBranch: (StatefulShellBranch branch) =>
+                _branchState[branch.navigatorKey]?.navigator,
           ),
         )
         .toList();
